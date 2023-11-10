@@ -1,0 +1,139 @@
+# install.packages("readmnist")
+
+library(readmnist)
+library(R.utils)
+library(neuralnet)
+# install.packages("MNIST")
+
+# Carregar a base X_treino
+url1 <- "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"
+arq_destino1 <- 'MNIST_treino_imagens.gz'
+download.file(url1, arq_destino1)
+f1 <- gunzip(arq_destino1, "file_1", remove=FALSE, temporary=TRUE)
+train_images <- Read.mnist(f1)
+train_images
+
+# Carregar os rótulos de treino
+url2 <- "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz"
+arq_destino2 <- 'MNIST_treino_labels.gz'
+download.file(url2, arq_destino2)
+f2 <- gunzip(arq_destino2, "file_2", remove=FALSE, temporary=TRUE)
+train_labels <- Read.mnist(f2)
+train_labels
+
+# Carregar as imagens de teste
+url3 <- "http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz"
+arq_destino3 <- 'MNIST_teste_images.gz'
+download.file(url3, arq_destino3)
+f3 <- gunzip(arq_destino3, "file_3", remove=FALSE, temporary=TRUE, overwrite=TRUE)
+test_images <- Read.mnist(f3)
+test_images
+
+# Carregar os rótulos de teste
+url4 <- "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz"
+arq_destino4 <- 'MNIST_teste_labels.gz'
+download.file(url4, arq_destino4)
+f4 <- gunzip(arq_destino4, "file_4", remove=FALSE, temporary=TRUE, overwrite=TRUE)
+test_labels <- Read.mnist(f4)
+test_labels
+
+# Montar a base de treino com imagens e rótulos
+X_train <- as.data.frame(train_images$pic)/255
+y_train <- nnet::class.ind(train_labels$labels)
+colnames(y_train) <- paste("val", colnames(y_train), sep = "")
+train <- cbind(X_train, y_train)
+train[1:10, c(1:10,784:794)]
+
+# Montar a base de teste com imagens e rótulos
+X_test <- as.data.frame(test_images$pic)/255
+y_test <- nnet::class.ind(test_labels$labels)
+colnames(y_test) <- paste("val", colnames(y_test), sep = "")
+test <- cbind(X_test, y_test)
+test[1:10, c(1:10,784:794)]
+
+save(X_train, file = 'MNIST_X_train.rdat')
+save(X_test, file = 'MNIST_X_test.rdat')
+save(y_train, file = 'MNIST_y_train.rdat')
+save(y_test, file = 'MNIST_y_test.rdat')
+
+
+load(file = 'MNIST_X_train.rdat')
+load(file = 'MNIST_y_train.rdat')
+load(file = 'MNIST_X_test.rdat')
+load(file = 'MNIST_y_test.rdat')
+
+train_labels$labels %>% class
+y_train %>% as.factor
+
+ytrain <- factor(train_labels$labels, labels = c('y0','y1','y2','y3','y4','y5','y6','y7','y8','y9'))
+ytrain
+MNIST_train <- cbind(X_train, y=ytrain)
+MNIST_train %>% colnames
+
+train_labels$labels %>% table
+################################################
+# definindo uma equação simples com 3 variáveis
+lado_esquerdo <- "y"
+lado_direito <- paste(names(X_train), collapse = "+")
+lado_esquerdo
+lado_direito
+string_f <- paste(lado_esquerdo, " ~ ", lado_direito)
+f_mnist <- formula(string_f)
+f_mnist
+##########################
+# Rodando uma rede
+tempo_ini <- Sys.time()
+
+nnGrid <-  expand.grid(.size=10, .decay = c(0))
+# nnGrid <-  expand.grid(.size=7, .decay = c(0, .005, .01, 0.015, 0.02, 0.025))
+ctrl <- caret::trainControl(method='none', classProbs=TRUE)
+
+nnfit <- caret::train(f_mnist,
+                      data=MNIST_train,
+                      method='nnet',
+                      metric='Accuracy',
+                      tuneGrid=nnGrid,
+                      trControl=ctrl,
+                      maxit=100,
+                      verboseIter = FALSE
+)
+
+
+
+
+nn <- neuralnet::neuralnet(string_f, 
+                           data = train %>% sample_frac(0.1), 
+                           hidden = 3
+                           # , 
+                           # linear.output = F,
+                           # act.fct = ident
+                           )
+plot(nn)
+tempo_fim <- Sys.time()
+
+tempo_fim - tempo_ini
+
+# definindo uma equação simples com 50 variáveis
+lado_esquerdo <- paste(colnames(y_train), collapse = "+")
+lado_direito <- paste(names(X_train)[400:450], collapse = "+")
+lado_esquerdo
+lado_direito
+string_f <- paste(lado_esquerdo, " ~ ", lado_direito)
+formula(string_f)
+
+# Rodando a rede neural
+start_time <- Sys.time() # Marca o tempo de início
+nn <- neuralnet::neuralnet(string_f, 
+                           data = train, 
+                           hidden = c(32), 
+                           linear.output = F)
+end_time <- Sys.time() # Marca o tempo de fim
+end_time - start_time # Mostra o tempo de execução
+
+# Plotando a rede
+start_time <- Sys.time() # Marca o tempo de início
+plot(nn)
+end_time <- Sys.time() # Marca o tempo de fim
+end_time - start_time # Mostra o tempo de execução
+
+# Agora não vamos plotar mais :)

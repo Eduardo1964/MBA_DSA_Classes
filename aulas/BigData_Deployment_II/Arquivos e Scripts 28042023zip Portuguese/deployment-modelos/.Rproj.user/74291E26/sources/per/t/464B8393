@@ -1,0 +1,26 @@
+{
+    "id": "464B8393",
+    "path": "E:/code/deployment-modelos/deployment-api.R",
+    "project_path": "deployment-api.R",
+    "type": "r_source",
+    "hash": "2471978032",
+    "contents": "",
+    "dirty": false,
+    "created": 1682474615776.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "182,0",
+        "scrollLine": "160"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1682346180,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1682346180,
+    "read_only": false,
+    "read_only_alternatives": []
+}

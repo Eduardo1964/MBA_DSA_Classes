@@ -1,0 +1,14 @@
+{
+  "name": "rotas_js",
+  "version": "1.0.0",
+  "description": "Modulo de introdução a APIs Web",
+  "main": "index_express.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Alexandre",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.1"
+  }
+}

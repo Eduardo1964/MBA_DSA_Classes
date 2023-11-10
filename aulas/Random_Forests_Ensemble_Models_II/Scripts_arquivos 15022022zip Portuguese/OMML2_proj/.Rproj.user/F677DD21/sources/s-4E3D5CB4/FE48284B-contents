@@ -1,0 +1,391 @@
+---
+title: "Untitled"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r, echo=FALSE}
+########################
+# Instalação de pacotes
+load("titanic.Rda")
+pacotes <- c('pROC',       # curva ROC 
+             'tidyverse',  # Pacote básico de datawrangling
+             'rpart',      # Biblioteca de árvores
+             'rpart.plot', # Conjunto com Rpart, plota a parvore
+             'gtools',     # funções auxiliares como quantcut,
+             'Rmisc',      # carrega a função sumarySE para a descritiva
+             'scales',     # importa paletas de cores
+             'viridis',    # Escalas 'viridis' para o ggplot2
+             'caret',       # Funções úteis para machine learning
+             'AMR',
+             'randomForest',
+             'fastDummies',
+             'rattle',
+             'xgboost'
+             
+)
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+```
+## Base
+
+891 observações
+Target: `Survived` 
+  - 549 não sobreviventes
+  - 342 sobreviventes
+
+- 8 variáveis
+
+## Amostras de treino e teste
+Vamos dividir a base em 80% para treinamento e 20% para teste.
+
+```{r}
+# Buscar reprodutibilidade
+set.seed(2360873)
+# Gera 80% de 1´s e 20% de 2´s para separar as amostras
+n <- sample(1:2, # vamos amostrar elementos do conjunto c(1,2)
+            size=nrow(titanic), # O tamanho da amostragem é 891
+            replace=TRUE, # Amostragem com reposição (de c(1,2))
+            prob=c(0.8,0.2)) # A probabilidade de ser 1 é 80%, de ser 2 é 20%
+
+# Amostra de treino: n==1 (os 80%)
+treino <- titanic[n==1,]
+# Amostra de teste: n==2 (os 20%)
+teste <- titanic[n==2,]
+```
+
+## Modelo
+
+Vamos iniciar com uma árvore de decisão no pacote ```rpart```.
+
+```{r}
+
+set.seed(2360873)
+arvore <- rpart::rpart(Survived ~ ., 
+                data = treino, 
+                control = rpart.control(cp = 0, 
+                                        minsplit = 1,
+                                        maxdepth = 30))
+
+rpart.plot(arvore)
+ 
+# custo de complexidade
+printcp(arvore)
+plotcp(arvore)
+
+```
+
+```{r}
+
+# guardar a semente
+
+set.seed(2360873)
+
+start_time <- Sys.time()
+controle <- caret::trainControl(
+    method='repeatedcv', # Solicita um K-Fold com repetições
+    number=10, # Número de FOLDS (o k do k-fold)
+    repeats=3, # Número de repetições
+    search='grid', # especifica o grid-search
+    summaryFunction = twoClassSummary, # Função de avaliação de performance
+    classProbs = TRUE # Necessário para calcular a curva ROC
+    )
+
+# agora vamos especificar o grid no CP
+tune <- expand.grid(.cp = seq(0, .05, length = 50))
+
+# Vamos treinar todos os modelos do grid-search com cross-validation
+gridsearch_ar <- train(Survived ~ .,         # Fórmula (todas as variáveis)
+                       data = treino,         # Base de dados
+                       method = 'rpart',     # Algoritmo = Árvore
+                       trControl = controle, # Parâmetros de controle do algoritmo
+                       metric='ROC',         # Avalia os modelos por essa métrica
+                       tuneGrid = tune)      # Percorre o grid especificado aqui
+
+print(gridsearch_ar$results)
+plot(gridsearch_ar)
+
+end_time <- Sys.time()
+end_time - start_time
+
+```
+
+
+#### Classe predita
+
+```{r}
+# Calcular probabilidade predita e classificação da árvore
+p_treino <- predict(gridsearch_ar, treino, type='prob')
+c_treino <- predict(gridsearch_ar, treino)
+# c_treino <- ifelse(p_treino[,2]>.5, "Y", "N") %>% as.factor
+
+p_teste <- predict(gridsearch_ar, teste, type='prob')
+c_teste <- predict(gridsearch_ar, teste)
+# c_teste <- ifelse(p_teste[,2]>.5, "Y", "N") %>% as.factor
+```
+
+### DESEMPENHO
+
+#### Matriz de confusão
+
+Treino
+```{r}
+cm_treino <- confusionMatrix(c_treino, treino$Survived)
+cm_treino
+```
+
+Teste
+```{r}
+cm_teste <- confusionMatrix(c_teste, teste$Survived)
+cm_teste
+```
+
+#### AUC e ROC
+
+Treino
+
+```{r}
+aval_treino <- data.frame(obs=treino$Survived, 
+                         pred=c_treino,
+                         Y = p_treino[,2],
+                         N = 1-p_treino[,2]
+                         )
+
+tcs_treino <- caret::twoClassSummary(aval_treino, 
+                              lev=levels(aval_treino$obs))
+
+# Podemos usar o mesmo dataframe para fazer a curva ROC:
+CurvaROC <- ggplot2::ggplot(aval_treino, aes(d = obs, m = Y, colour='1')) + 
+  plotROC::geom_roc(n.cuts = 0) +
+  scale_color_viridis_d(direction = -1, begin=0, end=.25) +
+  theme(legend.position = "none") +
+  ggtitle(paste("Curva ROC - base de treino - AUC = ", percent(tcs_treino[1])))
+  
+CurvaROC
+
+```
+
+Teste
+
+```{r}
+aval_teste <- data.frame(obs=teste$Survived, 
+                         pred=c_teste,
+                         Y = p_teste[,2],
+                         N = 1-p_teste[,2]
+                         )
+
+tcs_teste <- caret::twoClassSummary(aval_teste, 
+                              lev=levels(aval_teste$obs))
+
+# Podemos usar o mesmo dataframe para fazer a curva ROC:
+CurvaROC <- ggplot2::ggplot(aval_teste, aes(d = obs, m = Y, colour='1')) + 
+  plotROC::geom_roc(n.cuts = 0, color="blue") +
+  plotROC::geom_roc(data=aval_treino,
+                    aes(d = obs, m = Y, colour='1'),
+                    n.cuts = 0, color = "red") +
+  scale_color_viridis_d(direction = -1, begin=0, end=.25) +
+  theme(legend.position = "none") +
+  ggtitle(paste("Curva ROC | AUC-treino=",
+      percent(tcs_treino[1]),
+      "| AUC-teste = ",
+      percent(tcs_teste[1]))
+      )
+
+CurvaROC
+
+```
+
+
+### Random Forest
+
+O algoritmo do Random Forest funciona da mesma forma que o Bootstrap, porém além de amostrar as linhas da base, amostra também as colunas, de modo a diversificar, e assim aleatorizar, mais as árvores. 
+
+Com uma amostra de treinamento de tamanho $N$, com $P$ variáveis, escolhemos um número $M$ de árvores a serem treinadas. Assim, 
+
+- $M$ amostras de $N$ indivíduos são realizados (as observações são sorteadas com reposisão)
+- Para cada amostra, o número de variáveis pode ser menor ou igual a $P$
+- $M$ árvores são treinadas
+
+Para obtermos a probabilidade de classificação de um indivíduo em cada classe
+
+  1. $M$ árvores são geradas
+  2. Tira-se a média das probabilidades de classificação
+  3. A maior probabilidade define a classificação desse indivíduo
+
+#### Modelo
+
+```{r}
+# Alguns argumentos da função randomForest():
+# ntree: 500 arvores por default
+# mtry: Número de variáveis selecionadas aleatoriamente em cada divisão
+
+# medir tempo de execução (iniciar o cronometro)
+start_time <- Sys.time()
+
+# Rodar o algoritmo
+treino_rf <- randomForest::randomForest(
+    Survived ~ ., 
+    data = treino, 
+    ntree = 20,
+    mtry = 5, 
+    importance = T)
+
+treino_rf
+
+# parar o cronometro
+end_time <- Sys.time()
+end_time - start_time
+
+```
+
+```{r}
+rf_p_treino <- predict(treino_rf, treino, type='prob')
+rf_c_treino <- predict(treino_rf, treino)
+
+rf_p_teste <- predict(treino_rf, teste, type='prob')
+rf_c_teste <- predict(treino_rf, teste)
+
+rf_aval_teste <- data.frame(obs=treino$Survived, 
+                         pred=rf_c_treino,
+                         Y = rf_p_treino[,2],
+                         N = 1-rf_p_treino[,2]
+                         )
+
+rf_aval_teste <- data.frame(obs=teste$Survived, 
+                         pred=rf_c_teste,
+                         Y = rf_p_teste[,2],
+                         N = 1-rf_p_teste[,2]
+                         )
+```
+
+```{r}
+CurvaROC <- ggplot2::ggplot(aval_teste, aes(d = obs, m = Y, colour='1')) + 
+  plotROC::geom_roc(n.cuts = 0, color="blue") +
+  plotROC::geom_roc(data=aval_treino,
+                    aes(d = obs, m = Y, colour='1'),
+                    n.cuts = 0, color = "red") +
+  scale_color_viridis_d(direction = -1, begin=0, end=.25) +
+  theme(legend.position = "none") +
+  ggtitle(paste("Curva ROC Random Forest | AUC-treino=",
+      percent(tcs_treino[1]),
+      "| AUC_teste = ",
+      percent(tcs_teste[1]))
+      )
+
+CurvaROC
+```
+
+### Desempenho
+
+```{r}
+# Acurácia
+acuracia_treino_rf <- confusionMatrix(rf_c_treino, treino$Survived)$overall[['Accuracy']]
+acuracia_teste_rf  <- confusionMatrix(rf_c_teste, teste$Survived)$overall[['Accuracy']]
+
+# AUC
+p_treino_rf1 <- predict(treino_rf, treino, type = 'prob')
+p_treino_rf1 <- p_treino_rf1[,1]
+auc_titanic_treino_rf <- multiclass.roc(treino$Survived, p_treino_rf1, percent = TRUE)
+auc_titanic_treino_rf1 <- auc_titanic_treino_rf$auc[1]/100
+
+p_teste_rf1 <- predict(treino_rf, teste, type = 'prob')
+p_teste_rf1 <- p_teste_rf1[,1]
+auc_titanic_teste_rf <- multiclass.roc(teste$Survived, p_teste_rf1, percent = TRUE)
+auc_titanic_teste_rf1 <- auc_titanic_teste_rf$auc[1]/100
+
+# Gini
+gini_treino_rf = 2*(auc_titanic_treino_rf$auc[1]/100) -1 # 2*AUC - 1
+gini_teste_rf = 2*(auc_titanic_teste_rf$auc[1]/100) -1
+```
+
+```{r}
+tab_rf <- matrix(c(round(auc_titanic_treino_rf1,2), 
+                   round(auc_titanic_teste_rf1,2), 
+                   round(gini_treino_rf,2), 
+                   round(gini_teste_rf,2), 
+                   round(acuracia_treino_rf,2), 
+                   round(acuracia_teste_rf,2)),
+                 ncol=3, byrow=TRUE)
+
+
+tab_rf <- as.table(tab_rf)
+tab_rf
+```
+
+### Gridsearch
+
+```{r}
+# ajustando NA da coluna de idade
+titanic1 <- titanic %>% 
+              mutate(Age = ifelse(is.na(Age), 
+                                  mean(Age, na.rm = TRUE), 
+                                  Age))
+```
+
+
+```{r}
+customRF <- list(type = "Classification", 
+                 library = "randomForest", 
+                 loop = NULL)
+
+customRF$parameters <- data.frame(parameter = c("mtry", "ntree"), 
+                                  class = rep("numeric", 2), 
+                                  label = c("mtry", "ntree"))
+
+customRF$grid <- function(x, y, len = NULL, search = "grid") {}
+
+customRF$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+  randomForest(x, y, mtry = param$mtry, ntree=param$ntree, ...)
+}
+customRF$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+   predict(modelFit, newdata)
+customRF$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+   predict(modelFit, newdata, type = "prob")
+customRF$sort <- function(x) x[order(x[,1]),]
+customRF$levels <- function(x) x$classes
+
+```
+
+```{r}
+
+start_time <- Sys.time()
+
+# number: number of folds for training
+# repeats: keep the number for training
+
+# O objeto gerado por trainControl vai controlar o algoritmo 
+controle <- trainControl(
+    method='repeatedcv', # Solicita um K-Fold com repetições
+    number=10, # Número de FOLDS (o k do k-fold)
+    repeats=3, # Número de repetições
+    search='grid' # especifica o grid-search
+    )
+
+# agora vamos especificar o grid
+grid <- expand.grid(.mtry=c(1:15))
+
+# Vamos treinar todos os modelos do grid-search com cross-validation
+gridsearch_rf <- caret::train(Survived ~ .,      # Fórmula (todas as variáveis)
+                       data = titanic,    # Base de dados
+                       method = 'rf',     # Random-forest
+                       metric='Accuracy', # Escolhe o melhor por essa métrica
+                       tuneGrid = grid)   # Percorre o grid especificado aqui
+
+print(gridsearch_rf)
+plot(gridsearch_rf)
+
+end_time <- Sys.time()
+
+end_time <- start_time <- Sys.time()
+
+```
+
+

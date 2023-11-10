@@ -1,0 +1,58 @@
+nomes_variaveis <- read.csv(file='../UCI HAR Dataset/features.txt', 
+                     sep="\n", 
+                     header = F,
+                     col.names=c('Variaveis'))
+
+# eliminando caracteres especiais
+nomes_variaveis  <-  gsub("[ \\s,()]+", "", nomes_variaveis$Variaveis)
+
+nomes_variaveis %>% head
+
+subject_train <- read.table(file='../UCI HAR Dataset/train/y_train.txt')
+subject_train
+subject_train %>% dim
+
+X_train <-  read.table(file='../UCI HAR Dataset/train/X_train.txt', 
+                       sep = "" , 
+                       header = F , 
+                       col.names = nomes_variaveis,
+                       na.strings ="", 
+                       stringsAsFactors= F)
+
+X_train[1:10, 1:5]
+X_train %>% colnames
+X_train %>% dim
+?read.table
+
+subject_test <- read.table(file='../UCI HAR Dataset/test/y_test.txt')
+
+X_test <-  read.table(file='../UCI HAR Dataset/test/X_test.txt', 
+                       sep = "" , 
+                       header = F , 
+                       col.names = nomes_variaveis,
+                       na.strings ="", 
+                       stringsAsFactors= F)
+
+X_test %>% dim
+X_test %>% colnames
+
+y_train <- read.table(file='../UCI HAR Dataset/train/y_train.txt', header = F )
+yt <- factor(y_train$V1, labels=c('andando', 'subindo', 'descendo', 'sentado', 'em pé', 'deitado'))
+yt %>% table
+
+y_test <- read.table(file='../UCI HAR Dataset/test/y_test.txt', header = F )
+yts <- factor(y_test$V1, labels=c('andando', 'subindo', 'descendo', 'sentado', 'em pé', 'deitado'))
+yts %>% table
+
+colnames(yts) <- "y"
+colnames(yt) <- "y"
+
+HAR_train <- cbind(subject_train, X_train, y=yt)
+HAR_test  <- cbind(subject_test , X_test, y=yts)
+
+HAR_train[,c(1:10, 560:563)] %>% colnames()
+HAR_test[,c(1:10, 560:563)] %>% colnames()
+
+?save
+save(HAR_train, file='HAR_train.RData')
+save(HAR_test, file='HAR_test.RData')

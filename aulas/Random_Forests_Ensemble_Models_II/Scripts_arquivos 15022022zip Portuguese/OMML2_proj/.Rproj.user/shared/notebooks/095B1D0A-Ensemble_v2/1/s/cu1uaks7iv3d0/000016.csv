@@ -1,0 +1,32 @@
+"0","tempo_ini <- Sys.time()
+
+lista <-  as.vector(c(seq(10), seq(11,500,5)))
+
+acuracias <- vector(length=length(lista))
+
+for (i in 1:length(lista)){
+  num_arvores <- lista[i]
+  rf <- randomForest(as.factor(Survived) ~ ., 
+                     data=treino, 
+                     ntree=num_arvores)
+  
+  pred = predict(rf, newdata=teste)
+  cm <- caret::confusionMatrix(
+    data = pred, 
+    reference = teste$Survived)
+  acuracias[i] <- cm$overall['Accuracy']
+}
+tempo_fim <- Sys.time()
+tempo_fim - tempo_ini
+"
+"1","Time difference of "
+"1",""
+"1","12.86696"
+"1",""
+"1"," "
+"1",""
+"1","secs"
+"1",""
+"1","
+"
+"0","plot(lista,acuracias, type='b', col='red', pch=19)"

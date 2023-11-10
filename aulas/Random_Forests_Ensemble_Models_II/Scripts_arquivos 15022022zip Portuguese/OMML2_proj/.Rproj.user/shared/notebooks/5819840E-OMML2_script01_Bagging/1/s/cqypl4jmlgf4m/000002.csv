@@ -1,0 +1,5 @@
+"0","cm_treino <- confusionMatrix(p_treino, treino$Survived)
+"
+"2","Error in confusionMatrix(p_treino, treino$Survived) : 
+  objeto 'p_treino' não encontrado
+"

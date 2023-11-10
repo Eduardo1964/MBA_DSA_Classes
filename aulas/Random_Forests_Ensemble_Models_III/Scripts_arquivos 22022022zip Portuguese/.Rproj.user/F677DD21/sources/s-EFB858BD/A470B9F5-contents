@@ -1,0 +1,83 @@
+library(tidyverse)
+library(neuralnet)
+library(xlsx)
+library(caret)
+
+# carregar os dados
+load('EPA_19_cars.rdat')
+
+# checar a estrutura
+df %>% str
+
+# colunas quantitativas para padronizar entre 0 e 1
+cols <- c("fuel_economy_combined", 'eng_disp', 'num_cyl', 'num_gears', 'batt_capacity_ah')
+
+# função para padronizar
+range01 <- function(x){(x-min(x, na.rm=TRUE))/(max(x, na.rm=TRUE)-min(x, na.rm=TRUE))}
+
+# padronizar variaveis quantitativas
+df[cols] <- lapply(df[cols], range01)
+
+df %>% head
+###### criar a fórmula tipo y ~ x1 + x2 ... + xn
+n <- names(df)
+
+
+f_variaveis <- paste(n[-1], collapse = " + ")
+f_variaveis
+
+f <- as.formula(paste(n[1], " ~ ", f_variaveis))
+f
+
+df %>% str
+
+m <- model.matrix(f, data = df)
+m <- as.matrix(data.frame(m, df[, 1]))
+
+colnames(m)[28] <- "fuel_economy_combined"
+
+nomes <- colnames(m)
+nomes
+f_variaveis <- paste(nomes[-28], collapse=' + ')
+f_variaveis
+f <- as.formula(paste(nomes[28], " ~ ", f_variaveis))
+f
+
+# Treinando um Linear Perceptron
+start_time <- Sys.time() # Marca o tempo de início
+nn <- neuralnet(f, data=m, linear.output = TRUE)
+end_time <- Sys.time() # Marca o tempo de fim
+t <- end_time - start_time # Mostra o tempo de execução
+t
+
+pred <- predict(nn, m)
+plot(x = pred, y = df$fuel_economy_combined)
+caret::postResample(pred, df$fuel_economy_combined)
+
+N <- nrow(m)
+m[ind_teste,]
+
+##### Agora vamos fazer um k-fold para avaliar o modelo
+# montando um k-fold
+k <- 10 #número de folds
+stats <- NULL # Inicializando a qualidade dos modelos do fold
+m2 = m[sample(1:nrow(m)), ] # m2 é uma permutação de m para fazermos os folds
+
+for (i in 1:(k-1)){
+  ind_treino <- !seq(N)>N*(i/k) & seq(N)<=N*((i+1)/k)
+  ind_teste <- seq(N)>N*(i/k) & seq(N)<=N*((i+1)/k)
+  
+  nn <- neuralnet(f, data=m2[ind_treino,], hidden = c(7, 3), linear.output = TRUE)
+  pred <- predict(nn, m[ind_teste,])
+  stats_tmp <- caret::postResample(pred, df$fuel_economy_combined[ind_teste])
+  stats <- rbind(stats, stats_tmp)
+
+}
+
+stats %>% colMeans()
+
+nn <- neuralnet(f, data=m2[ind_treino,], hidden = c(7, 3), linear.output = TRUE)
+plot(nn)
+
+plot(x=df$eng_disp, y=df$fuel_economy_combined)
+

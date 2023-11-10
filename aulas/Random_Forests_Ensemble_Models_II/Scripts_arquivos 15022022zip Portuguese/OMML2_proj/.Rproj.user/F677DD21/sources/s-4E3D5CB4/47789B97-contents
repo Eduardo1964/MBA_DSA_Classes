@@ -1,0 +1,88 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r, echo=FALSE}
+########################
+# Instalação de pacotes
+load("titanic.Rda")
+pacotes <- c(
+             'tidyverse',  # Pacote básico de datawrangling
+             'rpart',      # Biblioteca de árvores
+             'rpart.plot', # Conjunto com Rpart, plota a parvore
+             'gtools',     # funções auxiliares como quantcut,
+             'Rmisc',      # carrega a função sumarySE para a descritiva
+             'scales',     # importa paletas de cores
+             'viridis',    # Escalas 'viridis' para o ggplot2
+             'caret',       # Funções úteis para machine learning
+             'AMR',
+             'randomForest',
+             'fastDummies',
+             'rattle',
+             'xgboost'
+             
+)
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+```
+## Boosting
+
+Boosting é qualquer método de ensemble (mistura de modelos) que tenha a finalidade de combinar modelos fracos de modo a resultar em um forte. A forma mais popular do boosting hoje consiste em uma construção sequencial de modelos, cada um tentando reduzir o erro do anterior. Para se obter a preditiva, basta encadear novamente as previsões de cada modelo somando-as.
+
+O mais conhecido é o gradiente boosting, que é baseado em árvores de decisão. A lógica do algoritmo é a seguinte:
+
+1) Ajustar uma árvore de decisão na base de desenvolvimento
+2) Gravar os erros de previsão em cada observação (resíduos)
+3) Ajustar uma nova árvore para explicar os resíduos obtidos em 2
+4) Repetir 1, 2 e 3 até atingir um critério de parada
+
+O XGBoosting (de extreme gradient boosting) é uma implementação do *gradient boosting* bastante eficiente e de código aberto desenvolvido pela Tianqi Chen, que ficou bastante popular por ser utilizada em diversas implementações de soluções vencedoras em competições de ciência de dados.
+
+
+#### A base
+
+Vamos focar no algoritmo, com a nossa base velha conhecida, o titanic.
+
+### Modelo
+
+
+```{r}
+set.seed(2360873)
+
+# parâmetros do trainControl
+#number: number of folds or resampling iterations
+#repeats: for repeated k-fold cross-validation, the number of complete sets of folds to compute
+tempo_ini <- Sys.time()
+
+modelo <- caret::train(
+  Survived ~., 
+  data = treino, 
+  method = "xgbTree",
+  trControl = trainControl("cv", number = 10),
+  tuneGrid = NULL,
+  verbosity = 0)
+?train
+modelo
+
+tempo_fim <- Sys.time()
+tempo_fim - tempo_ini
+```
+
+```{r}
+modelo$bestTune
+
+predict_modelo <- modelo %>% predict(teste)
+predict_modelo
+
+# erro medio de predição
+RMSE(predict_modelo, teste$Survived)
+```

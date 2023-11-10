@@ -1,0 +1,5 @@
+"0","end_time - start_time <- Sys.time()
+"
+"2","Error in end_time - start_time <- Sys.time() : 
+  não foi possível encontrar a função ""-<-""
+"

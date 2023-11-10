@@ -1,0 +1,37 @@
+library(tidyverse)
+library(neuralnet)
+install.packages('xlsx')
+library(xlsx)
+
+filename <-'EPA_cars_2019.xlsx' 
+df <- read.xlsx(filename,
+          sheetIndex = 1,
+          colIndex=seq(13))
+df <- df[-9]
+
+colSums(is.na(df))
+table(df$regen_brake, useNA='always')
+
+# substituir missing em regen_break
+df[is.na(df$regen_brake), 7] <- 'Not applicable'
+table(df$regen_brake, useNA='ifany')
+
+df %>% str
+df[is.na(df$batt_capacity_ah), 'batt_capacity_ah'] <- -1
+
+colSums(is.na(df))
+
+df$transmission <- as.factor(df$transmission)
+df$air_aspired_method <- as.factor(df$air_aspired_method)
+df$regen_brake <- as.factor(df$regen_brake)
+df$drive <- as.factor(df$drive)
+df$fuel_type <- as.factor(df$fuel_type)
+df$cyl_deactivate <- as.factor(df$cyl_deactivate)
+df$variable_valve <- as.factor(df$variable_valve)
+
+str(df)
+
+save(df, file = 'EPA_19_cars.rdat')
+
+load('EPA_19_cars.rdat')
+

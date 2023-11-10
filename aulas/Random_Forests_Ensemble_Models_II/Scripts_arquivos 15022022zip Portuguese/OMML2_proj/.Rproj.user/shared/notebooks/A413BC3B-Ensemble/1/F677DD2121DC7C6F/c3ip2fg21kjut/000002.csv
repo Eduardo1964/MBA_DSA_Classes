@@ -1,0 +1,11 @@
+"0","tempo_ini <- Sys.time
+for (i in 1:M){
+  estimativas[i] <- quantile(sample(x = dados, size=L, replace=TRUE), .75)
+}
+tempo_fim <- Sys.time
+
+tempo_fim - tempo_ini
+"
+"2","Error in tempo_fim - tempo_ini : 
+  argumento não-numérico para operador binário
+"

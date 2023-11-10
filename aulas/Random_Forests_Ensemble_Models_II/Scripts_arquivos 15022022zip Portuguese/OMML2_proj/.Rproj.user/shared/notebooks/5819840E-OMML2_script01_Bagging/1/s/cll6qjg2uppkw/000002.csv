@@ -1,0 +1,5 @@
+"0","rf_p_treino <- predict(treino_rf, treino, type='prob')
+"
+"2","Error in predict(treino_rf, treino, type = ""prob"") : 
+  objeto 'treino_rf' não encontrado
+"

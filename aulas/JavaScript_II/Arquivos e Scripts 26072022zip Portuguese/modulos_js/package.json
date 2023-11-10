@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "easyqrcodejs-nodejs": "^4.4.4"
+  }
+}

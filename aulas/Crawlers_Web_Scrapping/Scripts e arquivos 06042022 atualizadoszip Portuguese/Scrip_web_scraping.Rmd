@@ -1,0 +1,117 @@
+---
+title: "Web Scraping"
+output: html_notebook
+---
+
+# Baixa pacotes
+```{r}
+library("httr")
+library("rvest")
+library("dplyr")
+```
+
+
+# Busca dados na internet - rvest
+```{r}
+
+#Página: https://en.wikipedia.org/wiki/Web_scraping
+
+#função de leitura
+wikipedia <- read_html("https://en.wikipedia.org/wiki/Web_scraping")
+
+#busca nó de título
+wikipedia %>% html_elements("title")
+
+#busca nó de heading, mas tira parte do código HTML
+wikipedia %>% html_elements("h1") %>% html_text()
+
+#busca nó de parágrafo, mas tira parte do código HTML
+data <- wikipedia %>% html_elements("p") %>% html_text()
+
+length(data)
+
+data[2]
+
+```
+
+# Busca dados específicos em uma web page - rvest
+```{r}
+
+#Vamos olhar a página: https://en.wikipedia.org/wiki/Web_scraping
+
+library("rvest")
+
+#função de leitura
+wikipedia <- read_html("https://en.wikipedia.org/wiki/Web_scraping")
+
+#Busca específico 
+# "FAQ about linking – Are website terms of use binding contracts?".
+body_text <- wikipedia %>% html_elements("#cite_note-5") %>% html_text()
+
+substr(body_text, start = 1, stop = 20)
+
+substr(body_text, start = 21, stop = nchar(body_text))
+
+
+#Busca item listado
+techniques <- wikipedia %>% html_elements("#Techniques") %>% html_text()
+techniques
+```
+
+
+# Busca dados específicos em uma web page - httr
+```{r}
+
+#Vamos olhar a página http://www.r-datacollection.com/materials/html/OurFirstHTML.html
+
+library("httr")
+
+#Usa método GET()
+website <- GET("http://www.r-datacollection.com/materials/html/OurFirstHTML.html")
+
+#Visualiza como texto
+content(website, "text")
+
+```
+
+
+# Busca dados específicos em uma API IBGE - httr
+```{r}
+library("rvest")
+library("httr")
+library("jsonlite")
+
+#Mostra API de países do IBGE
+#https://servicodados.ibge.gov.br/api/docs/paises
+
+#Parâmetros
+#country = "BR"
+
+#"77823"  #pib per capita
+#"77819" #gastos com educação
+
+
+#1 - Listagem de indicadores - mostra na página web
+
+url = "https://servicodados.ibge.gov.br/api/v1/paises/indicadores/77823"
+
+page_data <- GET(url)
+
+result <- fromJSON(rawToChar(page_data$content))
+
+
+#2 - Indicadores - mostra na página web
+
+url2 = "https://servicodados.ibge.gov.br/api/v1/paises/BR/indicadores/77819"
+
+page_data2 <- GET(url2)
+
+#tipo de arquivo
+http_type(page_data2)
+
+jsonText <- content(page_data2, "text")
+jsonParsed <- content(page_data2, "parsed")
+```
+
+
+

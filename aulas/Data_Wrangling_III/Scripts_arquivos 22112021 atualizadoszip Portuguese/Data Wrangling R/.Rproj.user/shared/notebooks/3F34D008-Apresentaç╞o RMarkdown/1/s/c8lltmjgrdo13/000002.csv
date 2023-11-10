@@ -1,0 +1,12 @@
+"0","dados %>% 
+  rename(tempo=""Tempo para chegar à escola (minutos)"",
+         distancia=""Distância percorrida até a escola (quilômetros)"") %>% 
+  summarise(média_tempo=mean(tempo),
+            média_distância=mean(distancia)) %>% kable()
+"
+"2","Registered S3 methods overwritten by 'htmltools':
+  method               from         
+  print.html           tools:rstudio
+  print.shiny.tag      tools:rstudio
+  print.shiny.tag.list tools:rstudio
+"

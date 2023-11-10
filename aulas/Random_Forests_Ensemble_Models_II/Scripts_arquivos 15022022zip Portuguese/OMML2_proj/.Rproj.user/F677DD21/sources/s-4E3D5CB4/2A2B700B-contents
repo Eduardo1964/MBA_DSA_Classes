@@ -1,0 +1,211 @@
+---
+title: "Ensemble (bagging e boosting)"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+---
+```{r, echo=FALSE}
+########################
+# Instalação de pacotes
+load("titanic.Rda")
+pacotes <- c(
+             'tidyverse',  # Pacote básico de datawrangling
+             'rpart',      # Biblioteca de árvores
+             'rpart.plot', # Conjunto com Rpart, plota a parvore
+             'gtools',     # funções auxiliares como quantcut,
+             'Rmisc',      # carrega a função sumarySE para a descritiva
+             'scales',     # importa paletas de cores
+             'viridis',    # Escalas 'viridis' para o ggplot2
+             'caret',       # Funções úteis para machine learning
+             'AMR',
+             'randomForest',
+             'fastDummies',
+             'rattle',
+             'xgboost'
+             
+)
+
+if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
+  instalador <- pacotes[!pacotes %in% installed.packages()]
+  for(i in 1:length(instalador)) {
+    install.packages(instalador, dependencies = T)
+    break()}
+  sapply(pacotes, require, character = T) 
+} else {
+  sapply(pacotes, require, character = T) 
+}
+```
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+```
+
+# Índice
+
+1. Bootstrapping
+2. Ideias básicas de algoritmos de *bagging*
+3. Random Forest
+4. Boosting
+5. Gradient Boosting
+6. Outras misturas de modelos
+
+# Glossário
+
+Bootstrap - técnica de reamostragem com reposição da base de treino, que tem diversas finalidades
+Amostra bootstrap - uma das M amostras com reposição de uma base (em geral de treino)
+Bagging - significa *Bootstrap aggregation*, combinação de modelos diferentes, gerados em amostras *bootstrap* da base de treino, agregados por média simples
+Boosting - técnica de combinação de modelos em que um modelo tenta reduzir o erro do modelo anterior
+Random forest - caso particular do *bagging* que utiliza a árvore de decisão como modelo base
+Gradient Boosting - um modelo de *boosting* baseado em árvores de decisão
+Extreme Gradient Boosting - implementação do Gradient Boosting, famosa em competições, publicada por Tianqi Chen
+
+## *Bootstrapping*
+
+É um algoritmo utilizado com diversos fins em estatística e computação baseado em reamostragens feitas da base de dados original (tipicamente uma base de treinamento).
+
+Um uso popular é a construção de um intervalo de confiança sem suposições probabilísticas sobre a distribuição dos dados para uma variável contínua métrica. Na realidade há uma suposição, que é razoável em muitos casos em que se tem uma amostra bem feita: a amostra é representativa da população.
+
+O problema: temos um parâmetro theta, que como todo bom parâmetro, é uma função dos dados, e queremos fazer inferência sobre ele, por exemplo, construir um intervalo de confiança. No entanto, a distribuição desse parâmetro pode ser desconhecida - ou simplesmente podemos não querer assumir nada sobre ela. Então gostariamos de resolver por simulação.
+
+Ideia básica: Assumindo que a nossa amostra de dados (de treinamento em geral) é a melhor representação da população, a ideia é extrair uma amostra de mesmo tamanho, com reposição - essa amostra é chamada de amostra *bootstrap*. Podemos calcular o parâmetro sobre essa amostra, e guardar o resultado. Repetindo este procedimento um número grande de vezes, podemos ter uma distribuição simulada por *bootstrapping* do parâmetro de interesse.
+
+Exemplo: Intervalo de confiança para um quantil por *bootstrapping*:
+
+Dada uma amostra de tamanho N da variável de interesse ```y```, executamos o seguinte algoritmo:
+
+1. Definir um número M, correspondente ao número de simulações que vamos executar.
+2. Extrair uma amostra de tamanho N (com reposição) da amostra original
+3. Calcular a a estimativa desejada nessa amostra (guardar)
+4. Repetir 2 e 3 um número de vezes igual a M
+5. Temos agora uma distribuição simulada com M valores para o nosso parâmetro. Calculando os percentis desejados, podemos obter um intervalo de confiança para o quantil (o parâmetro de interesse no caso).
+
+
+```{r}
+# Gerando os dados
+set.seed(2360873)
+L=10000
+dados = rnorm(L)**2
+
+# o quantil amostral é:
+quantile(dados, .75)
+
+# Definindo o número de amostras bootstrap
+M=1000
+
+# Inicializando um vetor que conterá as médias
+estimativas <- vector(length=M)
+
+# Realizar M amostras dos dados e calcular a média em cada uma delas
+tempo_ini <- Sys.time()
+for (i in 1:M){
+  estimativas[i] <- quantile(sample(x = dados, size=L, replace=TRUE), .75)
+}
+tempo_fim <- Sys.time()
+
+tempo_fim - tempo_ini
+
+#Calcular os quantis
+estimativas %>% 
+  quantile(c(.025, .975)) %>% 
+  round(3)
+```
+
+### Bagging
+
+O Bagging é uma estratégia de *ensemble*, que consiste em tentar transformar diversos preditores *weak learners* em um *strong learner* através da combinação das previsões por uma "votação dura" ou por uma média simples.
+
+Bagging é um acrônimo para "Bootstrap-aggregation". Consiste em construir diversos modelos em amostras bootstrap da base de treino, e utilizar a média das previsões de cada modelo.
+
+### *Random Forest*
+
+O algoritmo de Bagging mais famoso é o *Random Forest*, que é um bagging de árvores de decisão - daí o nome.
+
+O algoritmo do Random Forest é o mesmo do *bootstrap*, com uma pequena modificação: além de amostrar as observações, amostramos também as colunas, de modo a gerar árvores mais diferentes.
+
+Temos uma amostra de treinamento (o mesmo que desenvolvimento) de tamanho ```N```, com ```P``` variáveis, escolhemos um número M de árvores para se treinar e seguimos os seguintes passos:
+
+1. Para cada j variando de 1 a M (j=1, 2,... M):
+    1. amostrar com reposição N indivíduos e ```p``` variáveis com ```p<P```
+    2. Treinar uma árvore de decisão A_j
+
+Esse basicamente é o nosso modelo: um conjunto de M árvores geradas com uma certa aleatoriedade.
+
+Podem restar agora duas perguntas:
+
+1) Como classificamos um indivúduo em M árvores?
+2) Como obtemos a probabilidade de esse indivíduo novo pertenter a cada classe (default e não default no nosso caso)?
+
+As duas perguntas se respondem de forma relatiamente simples: da mesma forma que o *bootstrapping*, através de uma média.
+
+Ou seja, para obter a probabilidade de classificação em cada classe fazemos o seguinte:
+- "Escoramos" o indivíduo nas M árvores (aplicando o *predict*)
+- Tiramos uma média das probabilidades de classificação 
+- A classificação é dada pela classe da variável resposta com maior probabilidade
+
+A idéia é muito simples não é mesmo?
+## Amostras de treino e teste
+Vamos dividir a base em 80% para treinamento e 20% para teste.
+
+```{r}
+# guardar a semente
+set.seed(2360873)
+# Gera 80% de 1´s e 20% de 2´s para separar as amostras
+n <- sample(1:2, # vamos amostrar elementos do conjunto c(1,2)
+            size=nrow(titanic), # O tamanho da amostragem é 891
+            replace=TRUE, # Amostragem com reposição (de c(1,2))
+            prob=c(0.8,0.2)) # A probabilidade de ser 1 é 80%, de ser 2 é 20%
+
+# Amostra de treino: n==1 (os 80%)
+treino <- titanic[n==1,]
+# Amostra de teste: n==2 (os 20%)
+teste <- titanic[n==2,]
+```
+
+## Random Forest
+
+Vamos construir uma *random forest* na função ```randomForest```, do pacote homônimo. 
+
+```{r}
+
+# construir uma árvore e avaliar na base de validação
+rf <- randomForest::randomForest(
+  as.factor(Survived) ~ Pclass + Sex + Age + Fare + Embarked, 
+  data=treino)
+
+# Onde ficam as árvores?
+names(rf)
+
+# Avaliar na base de teste
+pred = predict(rf, newdata=teste)
+table(teste$Survived, pred)
+```
+
+# Grid-search
+
+Podemos rodar diversas opções de *random forest* com as combinações de parâmetros que se deseja testar - esse procedimento é conhecido como *grid-search*, e vamos fazê-lo abaixo:
+
+```{r}
+tempo_ini <- Sys.time()
+
+lista <-  as.vector(c(seq(10), seq(11,500,5)))
+
+acuracias <- vector(length=length(lista))
+
+for (i in 1:length(lista)){
+  num_arvores <- lista[i]
+  rf <- randomForest(as.factor(Survived) ~ ., 
+                     data=treino, 
+                     ntree=num_arvores)
+  
+  pred = predict(rf, newdata=teste)
+  cm <- caret::confusionMatrix(
+    data = pred, 
+    reference = teste$Survived)
+  acuracias[i] <- cm$overall['Accuracy']
+}
+tempo_fim <- Sys.time()
+tempo_fim - tempo_ini
+plot(lista,acuracias, type='b', col='red', pch=19)
+```

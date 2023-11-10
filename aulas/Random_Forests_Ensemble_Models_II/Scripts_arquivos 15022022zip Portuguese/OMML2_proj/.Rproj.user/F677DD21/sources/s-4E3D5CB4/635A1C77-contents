@@ -1,0 +1,171 @@
+---
+title: "Ensemble (bagging e boosting)"
+output: html_notebook
+---
+
+# Índice
+
+1. Revisão de árvores (?)
+2. Bootstrapping
+3. Ideias básicas de algoritmos de *bagging*
+4. Random Forest
+5. Boosting
+6. Gradient Boosting
+7. Outras misturas de modelos
+
+
+```{r}
+
+```
+
+# Glossário
+
+```{r}
+
+```
+
+
+# *Bootstrapping*
+
+É um algoritmo utilizado com diversos fins em estatística e computação baseado em reamostragens feitas da base de dados original (tipicamente uma base de treinamento).
+
+Um uso popular é a construção de um intervalo de confiança sem qualquer suposição sobre a distribuição dos dados para uma variável contínua métrica. Na realidade há uma suposição, que é razoável em muitos casos em que se tem uma amostra bem feita: a amostra é representativa da população.
+
+O problema: temos um parâmetro $$\theta$$, que como todo bom parâmetro, é uma função dos dados, e queremos fazer inferência sobre ele, por exemplo, construir um intervalod e confiança.No entanto, a distribuição desse parâmetro pode ser desconhecida - ou simplesmente podemos não querer assumir nada sobre ela. Então gostariamos de resolver por simulação.
+
+Ideia básica: Assumindo que a nossa amostra de dados (de treinamento em geral) é a melhor representação da população, a ideia é extrair uma amostra de mesmo tamanho, com reposição - essa amostra é chamada de amostra *bootstrap*. Podemos calcular o parâmetro sobre essa amostra, e guardar o resultado. Repetindo este procedimento um número grande de vezes, podemos ter uma distribuição simulada por *bootstrapping* do parâmetro de interesse.
+
+Exemplo: calculo da média por *bootstrapping*:
+
+Dada uma amostra de tamanho N da variável de interesse ```y```, executamos o seguinte algoritmo:
+1. Definir um número M, correspondente ao número de simulações que vamos executar.
+2. Extrair uma amostra de tamanho N da amostra original
+3. Calcular a média dessa amostra (guardar)
+4. Repetir 2 e 3 M vezes
+5. Temos agora uma distribuição simulada com M valores para o nosso parâmetro. Calculando os percentis desejados, podemos obter um intervalo de confiança para a média (o parâmetro de interesse).
+
+
+```{r}
+# Gerando os dados
+set.seed(2360873)
+L=10000
+dados = rnorm(L)**2
+
+# Definindo o número de amostras bootstrap
+M=10000
+
+# Inicializando um vetor que conterá as médias
+medias <- vector(length=M)
+
+# Realizar M amostras dos dados e calcular a média em cada uma delas
+for (i in 1:M){
+  medias[i] <- mean(sample(x = dados, size=L, replace=TRUE))
+}
+
+#Calcular os quantis
+quantile(medias, c(.025, .975))
+```
+
+### *Random Forest*
+
+O algoritmo do Random Forest é o mesmo do *bootstrap*, com uma pequena modificação: além de amostrar as observações, amostramos também as colunas, de modo a gerar árvores mais diferentes.
+
+Temos uma amostra de treinamento (o mesmo que desenvolvimento) de tamanho ```N```, com ```P``` variáveis, escolhemos um número M de árvores para se treinar e seguimos os seguintes passos:
+
+1. Para cada $j$ variando de 1 a M ($j=1, 2,... M$):
+    1. amostrar com reposição N indivíduos e ```p``` variáveis com ```p<P```
+    2. Treinar uma árvore de decisão $A_j$
+
+Esse basicamente é o nosso modelo: um conjunto de M árvores geradas com uma certa aleatoriedade.
+
+Podem restar agora duas perguntas:
+
+1) Como classificamos um indivúduo em M árvores?
+2) Como obtemos a probabilidade de esse indivíduo novo pertenter a cada classe (default e não default no nosso caso)?
+
+As duas perguntas se respondem de forma relatiamente simples: da mesma forma que o *bootstrappint*, através de uma média.
+
+Ou seja, para obter a probabilidade de classificação em cada classe fazemos o seguinte:
+- "Escoramos" o indivíduo nas M árvores
+- Tiramos uma média das probabilidades de classificação 
+- A maior probabilidade define a classificação desse indivíduo
+
+A idéia é muito simples não é mesmo?
+
+```{r}
+library(randomForest)
+# separar a base em treino e validação
+treino = rbinom(nrow(titanic_train), 1, .75)
+X_train = titanic_train[treino==1,]
+X_valid = titanic_train[treino==0,]
+
+# Tratar valores missing
+age_mean <- X_train$Age %>% mean(na.rm=TRUE)
+
+X_train$Age[is.na(X_train$Age)] <- age_mean
+X_valid$Age[is.na(X_valid$Age)] <- age_mean
+
+# construir uma árvore e avaliar na base de validação
+rf <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + Fare + Embarked, data=X_train)
+
+# Explorar a árvore
+  # Onde as árvores ficam guardadas
+  # Como faz a previsão
+  # Avaliar o modelo
+
+# Avaliar na base de teste
+pred = predict(rf, newdata=X_valid)
+table(X_valid$Survived, pred)
+```
+```{r}
+acuracia <- function(new_data = X_valid, yverd=X_valid$Survived, modelo=rf){
+  pred = predict(modelo, newdata=new_data)
+  tab <-  table(yverd, pred)
+  acc <- (tab[1,1]+tab[2,2])/sum(tab)
+  return(acc)
+}
+acuracia()
+```
+# Grid-search
+
+Podemos rodar diversas opções de *random forest* com as combinações de parâmetros que se deseja testar - esse procedimento é conhecido como *grid-search*, e vamos fazê-lo abaixo:
+
+```{r}
+lista = as.vector(seq(1,400,1))
+
+acuracias <- medias <- vector(length=length(lista))
+
+for (i in 1:length(lista)){
+  num_arvores <- lista[i]
+  rf <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + Fare + Embarked, 
+                     data=X_train, 
+                     ntree=num_arvores)
+  ?randomForest
+  pred = predict(rf, newdata=X_valid)
+  tab <- table(X_valid$Survived, pred)
+  acuracias[i] <- acuracia()
+}
+
+plot(lista,acuracias, type='b', col='red', pch=19)
+```
+
+
+```{r}
+lista = as.vector(seq(1,500,1))
+
+acuracias <- medias <- vector(length=length(lista))
+
+for (i in 1:length(lista)){
+  num_arvores <- lista[i]
+  rf <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + Fare + Embarked, 
+                     data=X_train, 
+                     ntree=num_arvores)
+  ?randomForest
+  pred = predict(rf, newdata=X_valid)
+  tab <- table(X_valid$Survived, pred)
+  acuracias[i] <- acuracia()
+}
+
+plot(lista,acuracias, type='b', col='red', pch=19)
+```
+

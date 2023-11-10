@@ -1,0 +1,3 @@
+
+
+titanic %>% is.na %>% colSums()
